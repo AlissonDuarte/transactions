@@ -99,23 +99,27 @@ func (s *transactionService) StartTransactionWorker(ctx context.Context) {
 				senderAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.SenderID), "user")
 				if err != nil || senderAcc == nil {
 					tx.Status = "Failed"
+					tx.Message = "Sender account not found"
 					return s.transactionRepo.Update(ctx, &tx)
 				}
 
 				receiverAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.ReceiverID), "user")
 				if err != nil || receiverAcc == nil {
 					tx.Status = "Failed"
+					tx.Message = "Receiver account not found"
 					return s.transactionRepo.Update(ctx, &tx)
 				}
 
 				if !senderAcc.CanSend || senderAcc.Balance < tx.Amount {
 					tx.Status = "Failed"
+					tx.Message = "Insufficient balance"
 					return s.transactionRepo.Update(ctx, &tx)
 				}
 
 				authOK, err := s.checkAuthorization()
 				if err != nil || !authOK {
 					tx.Status = "Failed"
+					tx.Message = "Authorization failed"
 					return s.transactionRepo.Update(ctx, &tx)
 				}
 
@@ -135,6 +139,7 @@ func (s *transactionService) StartTransactionWorker(ctx context.Context) {
 				}
 
 				tx.Status = "Success"
+				tx.Message = "Transaction completed successfully"
 				return s.transactionRepo.Update(ctx, &tx)
 			})
 

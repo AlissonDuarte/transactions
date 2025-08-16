@@ -33,7 +33,12 @@ func (r *transactionRepository) Create(ctx context.Context, transaction *models.
 }
 
 func (r *transactionRepository) Update(ctx context.Context, transaction *models.Transaction) error {
-	result := r.db.WithContext(ctx).Save(transaction)
+	result := r.db.WithContext(ctx).Model(&models.Transaction{}).
+		Where("id = ?", transaction.ID).
+		Updates(map[string]interface{}{
+			"status":  transaction.Status,
+			"message": transaction.Message,
+		})
 	if result.Error != nil {
 		log.Printf("Error updating transaction: %v", result.Error)
 		return result.Error

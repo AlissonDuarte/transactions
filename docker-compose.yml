@@ -11,8 +11,16 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1g
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -26,7 +34,39 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     networks:
       - app_network
-      
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+  api:
+    build: .
+    container_name: picpay-api
+    depends_on:
+      - db
+      - rabbitmq
+    networks:
+      - app_network
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
 networks:
   app_network:
     driver: bridge
+
+volumes:
+  postgres_data:

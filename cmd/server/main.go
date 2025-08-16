@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/AlissonDuarte/transactions/internal/models"
 	"github.com/AlissonDuarte/transactions/internal/repository"
@@ -16,12 +19,29 @@ import (
 )
 
 func main() {
-	db, err := gorm.Open(postgres.Open(
-		"host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable"),
-		&gorm.Config{},
+	host := os.Getenv("DB_HOST")
+	port := os.Getenv("DB_PORT")
+	user := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASSWORD")
+	dbname := os.Getenv("DB_NAME")
+
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname,
 	)
+	var db *gorm.DB
+	var err error
+	for i := 0; i < 10; i++ {
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err == nil {
+			fmt.Printf("Connected to database: %v\n", db)
+			break
+		}
+		fmt.Println("Database not ready, retrying in 2s...")
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("failed to connect to database: %v", err))
 	}
 
 	if err := db.AutoMigrate(
@@ -32,11 +52,31 @@ func main() {
 		log.Fatalf("Error migrating database: %v", err)
 	}
 
-	amqpConn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	rabbitHost := os.Getenv("RABBITMQ_HOST")
+	rabbitPort := os.Getenv("RABBITMQ_PORT")
+	rabbitUser := os.Getenv("RABBITMQ_USER")
+	rabbitPass := os.Getenv("RABBITMQ_PASS")
+
+	rabbitURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
+		rabbitUser, rabbitPass, rabbitHost, rabbitPort,
+	)
+
+	// exemplo usando streadway/amqp
+	var amqpConn *amqp.Connection
+	for i := 0; i < 10; i++ {
+		amqpConn, err = amqp.Dial(rabbitURL)
+		if err == nil {
+			fmt.Println("Connected to RabbitMQ")
+			break
+		}
+		fmt.Println("RabbitMQ not ready, retrying in 2s...")
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("failed to connect to RabbitMQ: %v", err))
 	}
 	defer amqpConn.Close()
+	fmt.Println("Connected to RabbitMQ")
 
 	amqpChannel, err := amqpConn.Channel()
 	if err != nil {
