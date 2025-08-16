@@ -9,8 +9,9 @@ import (
 )
 
 type TransactionRepository interface {
-	Create(ctx context.Context, transaction *models.Transaction) error
-	Update(ctx context.Context, transaction *models.Transaction) error
+	Create(ctx context.Context, tx *models.Transaction) error
+	Update(ctx context.Context, tx *models.Transaction) error
+	Transaction(ctx context.Context, fn func(txRepo TransactionRepository) error) error
 }
 
 type transactionRepository struct {
@@ -37,4 +38,11 @@ func (r *transactionRepository) Update(ctx context.Context, transaction *models.
 		return result.Error
 	}
 	return nil
+}
+
+func (r *transactionRepository) Transaction(ctx context.Context, fn func(txRepo TransactionRepository) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		txRepo := &transactionRepository{db: tx}
+		return fn(txRepo)
+	})
 }

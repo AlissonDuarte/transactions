@@ -11,33 +11,132 @@ import (
 
 	"github.com/AlissonDuarte/transactions/internal/models"
 	"github.com/AlissonDuarte/transactions/internal/repository"
+	"github.com/streadway/amqp"
 )
 
 type TransactionService interface {
-	SendTransaction(
-		ctx context.Context,
-		senderID int64,
-		senderType string,
-		receiverID int64,
-		receiverType string,
-		amount float64,
-		message string) (*models.Transaction, error)
+	EnqueueTransaction(ctx context.Context, tx *models.Transaction) error
+	StartTransactionWorker(ctx context.Context)
 }
 
 type transactionService struct {
-	userRepo        repository.UserRepository
 	accountRepo     repository.AccountRepository
 	transactionRepo repository.TransactionRepository
 	httpClient      *http.Client
+	amqpChannel     *amqp.Channel
+	queueName       string
 }
 
-func NewTransactionService(userRepo repository.UserRepository, accountRepo repository.AccountRepository, transactionRepo repository.TransactionRepository) TransactionService {
+func NewTransactionService(
+	accountRepo repository.AccountRepository,
+	transactionRepo repository.TransactionRepository,
+	amqpChannel *amqp.Channel,
+	queueName string,
+) TransactionService {
 	return &transactionService{
-		userRepo:        userRepo,
 		accountRepo:     accountRepo,
 		transactionRepo: transactionRepo,
 		httpClient:      &http.Client{Timeout: 5 * time.Second},
+		amqpChannel:     amqpChannel,
+		queueName:       queueName,
 	}
+}
+
+func (s *transactionService) EnqueueTransaction(ctx context.Context, tx *models.Transaction) error {
+	tx.Status = "Pending"
+	if err := s.transactionRepo.Create(ctx, tx); err != nil {
+		return fmt.Errorf("failed to create transaction: %v", err)
+	}
+
+	body, err := json.Marshal(tx)
+	if err != nil {
+		return err
+	}
+
+	return s.amqpChannel.Publish(
+		"",
+		s.queueName,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+}
+
+func (s *transactionService) StartTransactionWorker(ctx context.Context) {
+	msgs, err := s.amqpChannel.Consume(
+		s.queueName,
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		for msg := range msgs {
+			var tx models.Transaction
+			if err := json.Unmarshal(msg.Body, &tx); err != nil {
+				msg.Nack(false, false)
+				continue
+			}
+
+			err := s.transactionRepo.Transaction(ctx, func(txRepo repository.TransactionRepository) error {
+				senderAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.SenderID), "")
+				if err != nil || senderAcc == nil {
+					tx.Status = "Failed"
+					return s.transactionRepo.Update(ctx, &tx)
+				}
+
+				receiverAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.ReceiverID), "")
+				if err != nil || receiverAcc == nil {
+					tx.Status = "Failed"
+					return s.transactionRepo.Update(ctx, &tx)
+				}
+
+				if !senderAcc.CanSend || senderAcc.Balance < tx.Amount {
+					tx.Status = "Failed"
+					return s.transactionRepo.Update(ctx, &tx)
+				}
+
+				authOK, err := s.checkAuthorization()
+				if err != nil || !authOK {
+					tx.Status = "Failed"
+					return s.transactionRepo.Update(ctx, &tx)
+				}
+
+				senderAcc.Balance -= tx.Amount
+				receiverAcc.Balance += tx.Amount
+
+				if err := s.accountRepo.Update(ctx, senderAcc); err != nil {
+					return err
+				}
+
+				if err := s.accountRepo.Update(ctx, receiverAcc); err != nil {
+					return err
+				}
+
+				if err := s.notificationExternalService(); err != nil {
+					return err
+				}
+
+				tx.Status = "Success"
+				return s.transactionRepo.Update(ctx, &tx)
+			})
+
+			if err != nil {
+				msg.Nack(false, true)
+			} else {
+				msg.Ack(false)
+			}
+		}
+	}()
 }
 
 func (s *transactionService) checkAuthorization() (bool, error) {
@@ -83,73 +182,4 @@ func (s *transactionService) notificationExternalService() error {
 	}
 
 	return errors.New(body.Message)
-}
-
-func (s *transactionService) SendTransaction(
-	ctx context.Context,
-	senderID int64,
-	senderType string,
-	receiverID int64,
-	receiverType string,
-	amount float64,
-	message string) (*models.Transaction, error) {
-	senderAccount, err := s.accountRepo.GetByOwnerID(ctx, senderID, senderType)
-	if err != nil || senderAccount == nil {
-		return nil, errors.New("sender account not found")
-	}
-	receiverAccount, err := s.accountRepo.GetByOwnerID(ctx, receiverID, receiverType)
-	if err != nil || receiverAccount == nil {
-		return nil, errors.New("receiver account not found")
-	}
-
-	if !senderAccount.CanSend {
-		return nil, errors.New("sender account cannot send transactions")
-	}
-
-	if senderAccount.Balance < amount {
-		return nil, errors.New("sender account balance is not enough")
-	}
-
-	authOK, err := s.checkAuthorization()
-
-	if err != nil {
-		return nil, fmt.Errorf("error checking authorization: %v", err)
-	}
-
-	if !authOK {
-		return nil, errors.New("authorization failed")
-	}
-
-	tx := &models.Transaction{
-		SenderID:   senderID,
-		ReceiverID: receiverID,
-		Amount:     amount,
-		Status:     "Pending",
-		Message:    message,
-	}
-
-	if err := s.transactionRepo.Create(ctx, tx); err != nil {
-		return nil, fmt.Errorf("error creating transaction: %v", err)
-	}
-
-	senderAccount.Balance -= amount
-	receiverAccount.Balance += amount
-
-	if err := s.accountRepo.Update(ctx, senderAccount); err != nil {
-		return nil, err
-	}
-	if err := s.accountRepo.Update(ctx, receiverAccount); err != nil {
-		return nil, err
-	}
-
-	if err := s.notificationExternalService(); err != nil {
-		return nil, err
-	}
-
-	tx.Status = "Success"
-	if err := s.transactionRepo.Update(ctx, tx); err != nil {
-		return nil, err
-	}
-
-	return tx, nil
 }
