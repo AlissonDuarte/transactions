@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/AlissonDuarte/transactions/internal/models"
@@ -24,8 +25,9 @@ func NewAccountRepository(db *gorm.DB) AccountRepository {
 }
 
 func (r *accountRepository) GetByOwnerID(ctx context.Context, ownerID int64, ownerType string) (*models.Account, error) {
+	fmt.Printf("ownerID: %d, ownerType: %s\n", ownerID, ownerType)
 	var account models.Account
-	result := r.db.WithContext(ctx).Where("owner_id = ? AND owner_type = ?", ownerID).First(&account)
+	result := r.db.WithContext(ctx).Where("owner_id = ? AND owner_type = ?", ownerID, ownerType).First(&account)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil

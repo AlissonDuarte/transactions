@@ -19,7 +19,6 @@ func NewTransactionHandler(service services.TransactionService) *TransactionHand
 	return &TransactionHandler{Service: service}
 }
 
-// RegisterRoutes registra as rotas no router Chi
 func (h *TransactionHandler) RegisterRoutes(r chi.Router) {
 	r.Route("/transactions", func(r chi.Router) {
 		r.Post("/", h.CreateTransaction)

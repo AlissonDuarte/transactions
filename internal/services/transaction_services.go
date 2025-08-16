@@ -96,13 +96,13 @@ func (s *transactionService) StartTransactionWorker(ctx context.Context) {
 			}
 
 			err := s.transactionRepo.Transaction(ctx, func(txRepo repository.TransactionRepository) error {
-				senderAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.SenderID), "")
+				senderAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.SenderID), "user")
 				if err != nil || senderAcc == nil {
 					tx.Status = "Failed"
 					return s.transactionRepo.Update(ctx, &tx)
 				}
 
-				receiverAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.ReceiverID), "")
+				receiverAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.ReceiverID), "user")
 				if err != nil || receiverAcc == nil {
 					tx.Status = "Failed"
 					return s.transactionRepo.Update(ctx, &tx)
