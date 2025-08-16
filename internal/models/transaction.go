@@ -4,12 +4,14 @@ import "gorm.io/gorm"
 
 type Transaction struct {
 	gorm.Model
-	ID         int64
-	SenderID   int64
-	ReceiverID int64
-	Amount     float64
-	Status     string
-	Message    string
+	ID           int64
+	SenderID     int64
+	SenderType   string
+	ReceiverID   int64
+	ReceiverType string
+	Amount       float64
+	Status       string
+	Message      string
 }
 
 func (t *Transaction) BeforeCreate(tx *gorm.DB) (err error) {

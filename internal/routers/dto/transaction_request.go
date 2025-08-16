@@ -1,11 +1,13 @@
 package dto
 
 type TransactionDTO struct {
-	SenderID   uint    `json:"sender_id"`
-	ReceiverID uint    `json:"receiver_id"`
-	Amount     float64 `json:"amount"`
-	Status     string  `json:"status"`
-	Message    string  `json:"message"`
+	SenderID     int64   `json:"sender_id"`
+	SenderType   string  `json:"sender_type"`
+	ReceiverID   int64   `json:"receiver_id"`
+	ReceiverType string  `json:"receiver_type"`
+	Amount       float64 `json:"amount"`
+	Status       string  `json:"status"`
+	Message      string  `json:"message"`
 }
 
 func (t TransactionDTO) ValidateStatus() bool {

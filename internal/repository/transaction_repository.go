@@ -9,6 +9,7 @@ import (
 )
 
 type TransactionRepository interface {
+	GetByID(ctx context.Context, id int64) (*models.Transaction, error)
 	Create(ctx context.Context, tx *models.Transaction) error
 	Update(ctx context.Context, tx *models.Transaction) error
 	Transaction(ctx context.Context, fn func(txRepo TransactionRepository) error) error
@@ -38,6 +39,18 @@ func (r *transactionRepository) Update(ctx context.Context, transaction *models.
 		return result.Error
 	}
 	return nil
+}
+
+func (r *transactionRepository) GetByID(ctx context.Context, id int64) (*models.Transaction, error) {
+	var tx models.Transaction
+	result := r.db.WithContext(ctx).First(&tx, id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+	return &tx, nil
 }
 
 func (r *transactionRepository) Transaction(ctx context.Context, fn func(txRepo TransactionRepository) error) error {

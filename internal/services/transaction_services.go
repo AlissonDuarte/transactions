@@ -15,6 +15,7 @@ import (
 )
 
 type TransactionService interface {
+	GetTransactionByID(ctx context.Context, id int64) (*models.Transaction, error)
 	EnqueueTransaction(ctx context.Context, tx *models.Transaction) error
 	StartTransactionWorker(ctx context.Context)
 }
@@ -42,6 +43,13 @@ func NewTransactionService(
 	}
 }
 
+func (s *transactionService) GetTransactionByID(ctx context.Context, id int64) (*models.Transaction, error) {
+	tx, err := s.transactionRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
 func (s *transactionService) EnqueueTransaction(ctx context.Context, tx *models.Transaction) error {
 	tx.Status = "Pending"
 	if err := s.transactionRepo.Create(ctx, tx); err != nil {
