@@ -11,3 +11,10 @@ type Transaction struct {
 	Status     string
 	Message    string
 }
+
+func (t *Transaction) BeforeCreate(tx *gorm.DB) (err error) {
+	if t.Status == "" {
+		t.Status = "Pending"
+	}
+	return nil
+}
