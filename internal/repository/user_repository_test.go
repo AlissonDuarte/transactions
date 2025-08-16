@@ -36,7 +36,7 @@ func TestUserRepository_CRUD(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotZero(t, user.ID)
 
-	got, err := repo.GetByID(ctx, int64(user.ID))
+	got, err := repo.GetByID(ctx, user.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, user.Name, got.Name)
 	assert.Equal(t, user.Email, got.Email)
@@ -49,7 +49,7 @@ func TestUserRepository_CRUD(t *testing.T) {
 	err = repo.Update(ctx, user)
 	assert.NoError(t, err)
 
-	updated, err := repo.GetByID(ctx, int64(user.ID))
+	updated, err := repo.GetByID(ctx, user.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, "Updated Name", updated.Name)
 
@@ -58,10 +58,10 @@ func TestUserRepository_CRUD(t *testing.T) {
 	assert.Len(t, users, 1)
 	assert.Equal(t, user.ID, users[0].ID)
 
-	err = repo.Delete(ctx, int64(user.ID))
+	err = repo.Delete(ctx, user.ID)
 	assert.NoError(t, err)
 
-	deleted, err := repo.GetByID(ctx, int64(user.ID))
+	deleted, err := repo.GetByID(ctx, user.ID)
 	assert.NoError(t, err)
 	assert.Nil(t, deleted)
 }
