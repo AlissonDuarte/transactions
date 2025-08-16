@@ -10,4 +10,5 @@ type Account struct {
 	Balance    float64
 	CanSend    bool
 	CanReceive bool
+	Active     bool
 }

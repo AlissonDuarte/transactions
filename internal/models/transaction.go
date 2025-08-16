@@ -5,8 +5,8 @@ import "gorm.io/gorm"
 type Transaction struct {
 	gorm.Model
 	ID         int64
-	SenderID   uint
-	ReceiverID uint
+	SenderID   int64
+	ReceiverID int64
 	Amount     float64
 	Status     string
 	Message    string
