@@ -135,7 +135,9 @@ func (s *transactionService) StartTransactionWorker(ctx context.Context) {
 				}
 
 				if err := s.notificationExternalService(); err != nil {
-					return err
+					tx.Status = "Failed"
+					tx.Message = fmt.Sprintf("Notification failed: %v", err)
+					return errors.New(tx.Message)
 				}
 
 				tx.Status = "Success"
