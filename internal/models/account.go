@@ -1,6 +1,9 @@
 package models
 
+import "gorm.io/gorm"
+
 type Account struct {
+	gorm.Model
 	ID         int64
 	OwnerID    int64
 	OwnerType  string

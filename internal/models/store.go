@@ -1,8 +1,11 @@
 package models
 
+import "gorm.io/gorm"
+
 type Store struct {
-	Name string
-	CNPJ string
-	Email string
+	gorm.Model
+	Name     string
+	CNPJ     string
+	Email    string
 	Password string
 }
