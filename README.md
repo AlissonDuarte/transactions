@@ -44,7 +44,7 @@ checks_failed......: 16.78% 799 out of 4760
 
 ✗ status 200 ou 201
 ↳ 66% — ✓ 1581 / ✗ 799
-✓ mensagem de falha para lojas
+✓ stores failed message
 
 HTTP
 http_req_duration..............: avg=8.91ms min=1.19ms med=7.42ms max=66.18ms p(90)=19.21ms p(95)=23.86ms
