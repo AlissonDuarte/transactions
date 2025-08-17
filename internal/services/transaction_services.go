@@ -17,7 +17,7 @@ import (
 type TransactionService interface {
 	GetTransactionByID(ctx context.Context, id int64) (*models.Transaction, error)
 	EnqueueTransaction(ctx context.Context, tx *models.Transaction) error
-	StartTransactionWorker(ctx context.Context)
+	StartTransactionWorker(ctx context.Context, ch *amqp.Channel)
 }
 
 type transactionService struct {
@@ -51,6 +51,17 @@ func (s *transactionService) GetTransactionByID(ctx context.Context, id int64) (
 	return tx, nil
 }
 func (s *transactionService) EnqueueTransaction(ctx context.Context, tx *models.Transaction) error {
+	if tx.SenderType != "user" {
+		tx.Status = "Failed"
+		tx.Message = "Invalid sender type"
+
+		if err := s.transactionRepo.Create(ctx, tx); err != nil {
+			return fmt.Errorf("failed to create transaction: %v", err)
+		}
+
+		return fmt.Errorf("invalid sender type: %s", tx.SenderType)
+	}
+
 	tx.Status = "Pending"
 	if err := s.transactionRepo.Create(ctx, tx); err != nil {
 		return fmt.Errorf("failed to create transaction: %v", err)
@@ -73,15 +84,15 @@ func (s *transactionService) EnqueueTransaction(ctx context.Context, tx *models.
 	)
 }
 
-func (s *transactionService) StartTransactionWorker(ctx context.Context) {
-	msgs, err := s.amqpChannel.Consume(
-		s.queueName,
-		"",
-		false,
-		false,
-		false,
-		false,
-		nil,
+func (s *transactionService) StartTransactionWorker(ctx context.Context, ch *amqp.Channel) {
+	msgs, err := ch.Consume(
+		s.queueName, // queue
+		"",          // consumer
+		false,       // autoAck
+		false,       // exclusive
+		false,       // noLocal
+		false,       // noWait
+		nil,         // args
 	)
 	if err != nil {
 		panic(err)
@@ -96,14 +107,14 @@ func (s *transactionService) StartTransactionWorker(ctx context.Context) {
 			}
 
 			err := s.transactionRepo.Transaction(ctx, func(txRepo repository.TransactionRepository) error {
-				senderAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.SenderID), "user")
+				senderAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.SenderID), tx.SenderType)
 				if err != nil || senderAcc == nil {
 					tx.Status = "Failed"
 					tx.Message = "Sender account not found"
 					return s.transactionRepo.Update(ctx, &tx)
 				}
 
-				receiverAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.ReceiverID), "user")
+				receiverAcc, err := s.accountRepo.GetByOwnerID(ctx, int64(tx.ReceiverID), tx.ReceiverType)
 				if err != nil || receiverAcc == nil {
 					tx.Status = "Failed"
 					tx.Message = "Receiver account not found"
@@ -129,7 +140,6 @@ func (s *transactionService) StartTransactionWorker(ctx context.Context) {
 				if err := s.accountRepo.Update(ctx, senderAcc); err != nil {
 					return err
 				}
-
 				if err := s.accountRepo.Update(ctx, receiverAcc); err != nil {
 					return err
 				}

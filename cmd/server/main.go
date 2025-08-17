@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -48,6 +49,7 @@ func main() {
 		&models.User{},
 		&models.Account{},
 		&models.Transaction{},
+		&models.Store{},
 	); err != nil {
 		log.Fatalf("Error migrating database: %v", err)
 	}
@@ -102,8 +104,15 @@ func main() {
 	transactionRepo := repository.NewTransactionRepository(db)
 
 	txService := services.NewTransactionService(accountRepo, transactionRepo, amqpChannel, queueName)
-	txService.StartTransactionWorker(nil)
 
+	numConsumers := 5
+	for i := 0; i < numConsumers; i++ {
+		ch, err := amqpConn.Channel()
+		if err != nil {
+			panic(err)
+		}
+		go txService.StartTransactionWorker(context.Background(), ch)
+	}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
